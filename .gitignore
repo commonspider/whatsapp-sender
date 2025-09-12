@@ -1,5 +1,8 @@
 profile
 .idea
+cache
+contatti.csv
+test
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,26 +1,25 @@
-import uuid
 from typing import Any
 
 from dash import Dash
-from dash.dcc import Store
+from dash.exceptions import BackgroundCallbackError
 from dash_mantine_components import MantineProvider, Table, Accordion, AccordionItem, Stack, AccordionControl, \
     AccordionPanel, SimpleGrid, Title
 
-from .common import logger, appender, log
+from .logger import logger, appender, log
 from .steps import steps
 
 
 def create_app():
     app = Dash(on_error=error_handler)
     app.layout = MantineProvider(
-        #forceColorScheme="dark",
+        forceColorScheme="dark",
         children=SimpleGrid(
             cols=2,
             children=[
                 Stack([
                     create_accordion(dict([step() for step in steps])),
                     logger,
-                    appender,
+                    appender
                 ]),
                 Stack(
                     children=[
@@ -37,7 +36,10 @@ def create_app():
 
 
 def error_handler(err):
-    log(f"Exception: {err}")
+    if isinstance(err, BackgroundCallbackError):
+        log(f"Exception: {err.args[0]}")
+    else:
+        log(str(err))
 
 
 def create_accordion(items: dict[str, Any]):

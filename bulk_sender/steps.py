@@ -4,14 +4,15 @@ from io import StringIO, BytesIO
 from typing import Callable, Sequence, Text
 
 import PIL.Image
+import dash
 import pandas
-from dash import callback, Output, Input, State, set_props
-from dash.dcc import Upload
+from dash import callback, Output, Input, State
+from dash.dcc import Upload, Store
 from dash_mantine_components import Button, TextInput, Textarea, Card, Image
 from pandas import DataFrame
-from wautils import login_qr, post_login, login_code, send_message
 
-from .common import log, get_driver
+from .logger import log
+from .wautils import login_qr, post_login, login_code, send_message_old
 
 steps: list[Callable[[], tuple[str, list]]] = []
 
@@ -29,18 +30,20 @@ def step_login():
         [
             Button("Login con QR", id="button_login_qr"),
             "Clicca qui per mostrare il qr",
-            Image(id="image_qr"), "da scannerizzare con l'app",
+            Image(id="image_qr"), "e scannerizza con l'app",
             Button("Login con codice", id="button_login_code"),
-            "Clicca qui per mostrate il codice da inserire nell'app. Prima compila i campi sotto",
+            "Compila i campi sotto, poi clicca qui per mostrate il codice da inserire nell'app. ",
             TextInput(id="input_code", disabled=True), "Codice",
             TextInput("Italia", id="input_country", persistence=True, persistence_type="local"), "Stato di appartenenza (usato per il prefisso)",
             TextInput(id="input_phone", persistence=True, persistence_type="local"), "Numero di telefono",
+            Store(id="store_logging_in")
         ]
     )
 
 
 @callback(
-    Output("button_login_qr", "n_clicks"),
+    Output("image_qr", "src"),
+    Output("store_logging_in", "data", allow_duplicate=True),
     Input("button_login_qr", "n_clicks"),
     prevent_initial_call=True,
     running=[
@@ -49,16 +52,23 @@ def step_login():
     ],
 )
 def callback_login_qr(_):
-    driver = get_driver()
-    data = login_qr(driver)
-    set_props("image_qr", {"src": PIL.Image.open(BytesIO(data))})
-    post_login(driver)
-    log("Login effettuato")
-    return _
+    data = login_qr()
+    if data is not None:
+        image = PIL.Image.open(BytesIO(data))
+        old_size = image.size
+        new_size = (old_size[0] + 30, old_size[1] + 30)
+        image_with_border = PIL.Image.new("RGB", new_size)
+        image_with_border.paste((255, 255, 255), (0, 0, new_size[0], new_size[1]))
+        box = tuple((n - o) // 2 for n, o in zip(new_size, old_size))
+        image_with_border.paste(image, box)
+    else:
+        image_with_border = None
+    return image_with_border, True
 
 
 @callback(
-    Output("button_login_code", "n_clicks"),
+    Output("input_code", "value"),
+    Output("store_logging_in", "data", allow_duplicate=True),
     Input("button_login_code", "n_clicks"),
     State("input_country", "value"),
     State("input_phone", "value"),
@@ -69,12 +79,22 @@ def callback_login_qr(_):
     ],
 )
 def callback_login_code(_, country: str, phone: str):
-    driver = get_driver()
-    code = login_code(driver, country, phone)
-    set_props("input_code", {"value": code})
-    post_login(driver)
-    log("Login effettuato")
-    return _
+    code = login_code(country, phone)
+    return code, True
+
+
+@callback(
+    Output("log_appender", "data", allow_duplicate=True),
+    Output("store_logging_in", "data", allow_duplicate=True),
+    Input("store_logging_in", "data"),
+    prevent_initial_call=True
+)
+def callback_logging_in(status):
+    if status:
+        post_login()
+        return "Logged in", False
+    else:
+        return "Logged in", dash.no_update
 
 
 # Load Contacts
@@ -162,7 +182,7 @@ def callback_select_contacts(_, selection: str, name_col: str, phone_col: str, c
         phone = parse_number(row[phone_i])
         body.append((row[0], name, phone))
     log("Contatti selezionati")
-    return {"head": ["NUM", name_col, phone_col], "body": body}
+    return {"head": ["NUM", "Nome", "Telefono"], "body": body}
 
 
 # Send Messages
@@ -174,6 +194,8 @@ def step_send_messages():
             Textarea(id="textarea_skeleton", persistence=True, persistence_type="local"),
             "Scrivi il tuo message. Puoi il usare il nome delle colonne tra parentesi graffe come placeholder. "
             "(Esempio: Ciao {Nome}! Come stai?)",
+            TextInput("20", id="input_delay", persistence=True, persistence_type="local"),
+            "Tempo di attesa tra un messaggio e l'altro",
             Button("INVIA!", id="button_send_messages"),
             "Invia tutto e ciaone!",
         ]
@@ -181,31 +203,31 @@ def step_send_messages():
 
 
 @callback(
-    Output("button_send_messages", "n_clicks", allow_duplicate=True),
+    Output("log_appender", "data", allow_duplicate=True),
     Input("button_send_messages", "n_clicks"),
     State("textarea_skeleton", "value"),
-    State("input_col_phone", "value"),
     State("table_selected", "data"),
+    State("input_delay", "value"),
     prevent_initial_call=True,
     running=[
         (Output("button_send_messages", "disabled"), True, False),
     ],
 )
-def callback_send_messages(_, skeleton: str, col_phone: str, selected: dict):
-    driver = get_driver()
+def callback_send_messages(_, skeleton: str, selected: dict, delay: str):
+    delay = float(delay)
     cols: list = selected["head"]
-    phone_index = cols.index(col_phone)
+    phone_index = cols.index("Telefono")
+    logs = []
     for row in selected["body"]:
         phone = row[phone_index]
         if phone is not None:
             text = skeleton.format(**dict(zip(cols, row)))
-            if send_message(driver, phone, text):
-                log(f"Messaggio inviato a {phone}")
-                time.sleep(0.5)
+            if send_message_old(phone, text):
+                logs.append(f"Messaggio inviato a {phone}")
+                time.sleep(delay)
             else:
-                log(f"ATTENZIONE! {phone} non ha whatsapp!")
-    log("Finito!")
-    return _
+                logs.append(f"ATTENZIONE! {phone} non ha whatsapp!")
+    return "\n".join(logs)
 
 
 # Utils

@@ -15,4 +15,10 @@ Utilizzo:
 
 ## Linux
 
-Già lo sai ;)
+Installazione:
+
+1Doppio click su install.sh
+
+Utilizzo:
+
+1. Doppio click su start.sh

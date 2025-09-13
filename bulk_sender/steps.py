@@ -4,16 +4,18 @@ from io import StringIO, BytesIO
 from typing import Callable, Sequence, Text
 
 import PIL.Image
-import dash
 import pandas
 from dash import callback, Output, Input, State
 from dash.dcc import Upload, Store
+from dash.exceptions import PreventUpdate
 from dash_mantine_components import Button, TextInput, Textarea, Card, Image
 from pandas import DataFrame
 
 from .logger import log
-from .wautils import login_qr, post_login, login_code, send_message_old
+from .threaded_manager import ThreadedManager
+from .wautils import login_qr, post_login, login_code, send_message_old, open_wa
 
+manager = ThreadedManager()
 steps: list[Callable[[], tuple[str, list]]] = []
 
 
@@ -42,7 +44,7 @@ def step_login():
 
 
 @callback(
-    Output("image_qr", "src"),
+    Output("image_qr", "src", allow_duplicate=True),
     Output("store_logging_in", "data", allow_duplicate=True),
     Input("button_login_qr", "n_clicks"),
     prevent_initial_call=True,
@@ -67,7 +69,7 @@ def callback_login_qr(_):
 
 
 @callback(
-    Output("input_code", "value"),
+    Output("input_code", "value", allow_duplicate=True),
     Output("store_logging_in", "data", allow_duplicate=True),
     Input("button_login_code", "n_clicks"),
     State("input_country", "value"),
@@ -85,6 +87,8 @@ def callback_login_code(_, country: str, phone: str):
 
 @callback(
     Output("log_appender", "data", allow_duplicate=True),
+    Output("image_qr", "src", allow_duplicate=True),
+    Output("input_code", "value", allow_duplicate=True),
     Output("store_logging_in", "data", allow_duplicate=True),
     Input("store_logging_in", "data"),
     prevent_initial_call=True
@@ -92,9 +96,9 @@ def callback_login_code(_, country: str, phone: str):
 def callback_logging_in(status):
     if status:
         post_login()
-        return "Logged in", False
+        return "Logged in", "", "", False
     else:
-        return "Logged in", dash.no_update
+        raise PreventUpdate
 
 
 # Load Contacts
@@ -158,6 +162,8 @@ def step_select_contacts():
     prevent_initial_call=True
 )
 def callback_select_contacts(_, selection: str, name_col: str, phone_col: str, contacts: dict):
+    if selection is None:
+        raise PreventUpdate
     rows = []
     for item in selection.split(","):
         parts = item.split("-")
@@ -167,13 +173,14 @@ def callback_select_contacts(_, selection: str, name_col: str, phone_col: str, c
             rows.extend(range(int(parts[0]), int(parts[1]) + 1))
         else:
             log("Selezione invalida")
-            return {"caption": "Selectione invalida"}
+            return {"caption": "Selezione invalida"}
     try:
         name_i = contacts["head"].index(name_col)
         phone_i = contacts["head"].index(phone_col)
-    except ValueError:
-        log("Colonna non trovata")
-        return {"caption": "Colonna non trovata"}
+    except ValueError as exc:
+        name = exc.args[0].split("'")[1]
+        log(f"Colonna {name} non trovata")
+        return {"caption": f"Colonna {name} non trovata"}
     body = []
     for row in contacts["body"]:
         if int(row[0]) not in rows:
@@ -208,6 +215,8 @@ def step_send_messages():
     State("textarea_skeleton", "value"),
     State("table_selected", "data"),
     State("input_delay", "value"),
+    background=True,
+    manager=manager,
     prevent_initial_call=True,
     running=[
         (Output("button_send_messages", "disabled"), True, False),
@@ -215,22 +224,31 @@ def step_send_messages():
 )
 def callback_send_messages(_, skeleton: str, selected: dict, delay: str):
     delay = float(delay)
-    cols: list = selected["head"]
+    try:
+        cols: list = selected["head"]
+    except KeyError:
+        return "Prima seleziona i tuoi contatti!"
+    name_index = cols.index("Nome")
     phone_index = cols.index("Telefono")
-    logs = []
+    open_wa()
     for row in selected["body"]:
+        name = row[name_index]
         phone = row[phone_index]
-        if phone is not None:
+        if phone is None:
+            log(f"ATTENZIONE! {name} non ha un numero di cellulare")
+        else:
             text = skeleton.format(**dict(zip(cols, row)))
             if send_message_old(phone, text):
-                logs.append(f"Messaggio inviato a {phone}")
-                time.sleep(delay)
+                log(f"Messaggio inviato a {name} ({phone})")
             else:
-                logs.append(f"ATTENZIONE! {phone} non ha whatsapp!")
-    return "\n".join(logs)
+                log(f"ATTENZIONE! {name} ({phone}) non ha whatsapp!")
+        time.sleep(delay)
+    return "Finito!"
 
 
 # Utils
+
+
 def get_contacts_table(df: DataFrame) -> tuple[Sequence, Sequence]:
     return (
         ("NUM", *df.columns),
@@ -241,7 +259,7 @@ def get_contacts_table(df: DataFrame) -> tuple[Sequence, Sequence]:
     )
 
 
-def capitalize(string: str):
+def capitalize(string: str | None):
     if isinstance(string, str):
         return " ".join([part.capitalize() for part in string.split()])
     else:

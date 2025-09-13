@@ -37,7 +37,7 @@ def create_app():
 
 def error_handler(err):
     if isinstance(err, BackgroundCallbackError):
-        log(f"Exception: {err.args[0]}")
+        log(f"{err.__class__.__name__}: {err.args[0]}")
     else:
         log(str(err))
 

@@ -1,6 +1,6 @@
 import time
 
-from selenium.common import NoSuchElementException
+from selenium.common import NoSuchElementException, ElementClickInterceptedException
 from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
@@ -9,6 +9,11 @@ from selenium.webdriver.support.wait import WebDriverWait
 from .driver import get_driver
 
 WA_URL = "https://web.whatsapp.com/"
+
+
+def open_wa():
+    driver = get_driver()
+    driver.get(WA_URL)
 
 
 def login_code(country: str, phone: str):
@@ -57,18 +62,22 @@ def send_message(phone: str, text: str):
 
 def send_message_old(phone: str, text: str):
     driver = get_driver()
-    search = driver.find_element(By.XPATH, '//div[@aria-placeholder="Search or start a new chat"]')
+    driver.find_element(By.XPATH, '//button[@aria-label="New chat"]').click()
+    time.sleep(1)
+    search = driver.find_element(By.XPATH, '//div[@aria-label="Search name or number"]')
     search.click()
     search.send_keys(phone)
     time.sleep(1)
-    items = driver.find_elements(By.XPATH, '//div[@role="listitem"]')
-    if len(items) == 0:
+    listitems = driver.find_elements(By.XPATH, '//div[@role="listitem"]')
+    try:
+        listitems[1].click()
+    except ElementClickInterceptedException:
         return False
-    item = items[1]
-    item.click()
-    bar = driver.find_element(By.XPATH, '//div[@aria-placeholder="Type a message"]')
-    bar.click()
-    bar.send_keys(text)
+    time.sleep(1)
+    input_bar = driver.find_element(By.XPATH, '//div[@aria-placeholder="Type a message"]')
+    input_bar.click()
+    input_bar.send_keys(text)
+    time.sleep(1)
     driver.find_element(By.XPATH, '//button[@aria-label="Send"]').click()
     time.sleep(1)
     return True

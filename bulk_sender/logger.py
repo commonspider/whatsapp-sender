@@ -1,5 +1,6 @@
 from dash import callback, Output, Input, State, set_props
 from dash.dcc import Store
+from dash.exceptions import PreventUpdate
 from dash_mantine_components import Code
 
 logger = Code(children="Logs:", id="log_container", block=True)
@@ -14,6 +15,8 @@ appender = Store(id="log_appender")
     prevent_initial_call=True,
 )
 def append_log(new_line: str, log_history: str):
+    if new_line is None:
+        raise PreventUpdate
     return f"{log_history}\n> {new_line}", None
 
 

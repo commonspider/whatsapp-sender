@@ -3,3 +3,5 @@ dash
 dash-mantine-components
 pillow
 selenium
+werkzeug~=3.1.4
+urllib3~=2.6.0

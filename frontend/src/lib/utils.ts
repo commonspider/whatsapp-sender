@@ -14,5 +14,5 @@ export function zipObject(keys: string[], values: string[]) {
 }
 
 export function sleep(seconds: number) {
-  return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+  return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 }

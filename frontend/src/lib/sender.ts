@@ -1,7 +1,12 @@
 import { writable } from "svelte/store";
-import {sleep} from "./utils";
-import {socket} from "./socket";
-import {getElementsByXPath, mutationListener, waitForElement, waitForElements} from "./dom";
+import { sleep } from "./utils";
+import { socket } from "./socket";
+import {
+  getElementsByXPath,
+  mutationListener,
+  waitForElement,
+  waitForElements,
+} from "./dom";
 
 export const n_packets = writable(0);
 export const packets_sent = writable(0);
@@ -27,7 +32,7 @@ async function sendPacket(phone: string, message: string) {
   const listitems = await mutationListener(() => {
     const items = getElementsByXPath('//*[@role="listitem"]');
     if (items.length <= 2) return items;
-  })
+  });
   if (listitems.length != 2) return false;
 
   await socket.execute("click", listitems[1]);

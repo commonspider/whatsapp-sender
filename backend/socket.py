@@ -1,9 +1,11 @@
 import time
+import traceback
 from contextlib import suppress
 from typing import TypedDict, Any
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.remote.webelement import WebElement
 
 script_get_command = 'window["WhatsappSenderSocket"].getCommand(arguments[0]);'
 
@@ -28,11 +30,24 @@ def socket_loop(driver: WebDriver):
 
 
 def execute_command(driver: WebDriver, _type: str, data: Any) -> bool:
-    with suppress(Exception):
+    try:
         if _type == "click":
-            element = driver.find_element(By.XPATH, data)
-            element.click()
-            return True
-        else:
-            return False
+            if isinstance(data, WebElement):
+                data.click()
+                return True
+            elif isinstance(data, str):
+                element = driver.find_element(By.XPATH, data)
+                element.click()
+                return True
+        elif _type == "click_and_type":
+            if isinstance(data, dict):
+                element = data["element"]
+                value = data["value"]
+                if isinstance(element, str):
+                    element = driver.find_element(By.XPATH, element)
+                    element.click()
+                    element.send_keys(value)
+                    return True
+    except Exception as exc:
+        traceback.print_exception(exc)
     return False

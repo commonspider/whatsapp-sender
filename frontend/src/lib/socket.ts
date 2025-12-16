@@ -1,4 +1,4 @@
-import {error} from "./log";
+import { error } from "./log";
 
 let command_index_counter = 0;
 
@@ -17,13 +17,14 @@ class Socket {
     this.resolves = new Map();
   }
 
-  runCommand(type: string, data: any) {
-    return new Promise((resolve) => {
+  async execute(type: string, data: any) {
+    const result = await new Promise((resolve) => {
       const id = command_index_counter;
       command_index_counter++;
       this.resolves.set(id, resolve);
       this.commands.push({ id, type, data });
     });
+    if (!result) throw new Error("Command failed");
   }
 
   getCommand(callback: (Command) => void) {

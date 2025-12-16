@@ -1,34 +1,21 @@
 import { inject, insertBefore, replaceElement } from "./lib/dom";
 import SidebarWidget from "./components/SidebarWidget.svelte";
+import Main from "./components/Main.svelte";
 import { log } from "./lib/log";
 
-const widget_id = "whatsapp-sender-sidebar-widget";
+// MAIN
 
-function create_widget_anchor() {
+inject(Main, '//h1[contains(text(),"WhatsApp Web")]', (element) => {
   const anchor = document.createElement("div");
-  anchor.setAttribute("id", widget_id);
-  return anchor;
-}
+  const container = element.parentElement?.parentElement?.parentElement;
+  if (container === undefined || container === null)
+    throw new Error("Could not inject main");
+  else return replaceElement(container, anchor);
+}).then(() => log("Main injected"));
 
-function replace_sidebar_widget(element: HTMLElement) {
-  const anchor = create_widget_anchor();
-  replaceElement(element, anchor);
-  return anchor;
-}
+// SIDEBAR WIDGET
 
-function inject_sidebar_widget(element: HTMLElement) {
-  const anchor = create_widget_anchor();
-  insertBefore(element, anchor);
-  return anchor;
-}
-
-inject(SidebarWidget, {
-  replace_sidebar_widget: {
-    xpath: `//div[@id="${widget_id}"]`,
-    injector: replace_sidebar_widget,
-  },
-  inject_sidebar_widget: {
-    xpath: '//*[@aria-label="chat-list-filters"]',
-    injector: inject_sidebar_widget,
-  },
+inject(SidebarWidget, '//*[@aria-label="chat-list-filters"]', (element) => {
+  const anchor = document.createElement("div");
+  return insertBefore(element, anchor);
 }).then((_) => log("SidebarWidget injected"));

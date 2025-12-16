@@ -7,6 +7,8 @@ from urllib3.exceptions import ProtocolError, MaxRetryError
 
 from .socket import socket_loop
 
+exit_exception = [NoSuchWindowException, ProtocolError, InvalidSessionIdException, MaxRetryError]
+
 
 def run(driver: WebDriver):
     with open("build/inject.js") as f:
@@ -14,7 +16,7 @@ def run(driver: WebDriver):
 
     driver.get("https://web.whatsapp.com/")
     driver.execute_script(inject_script)
-    with suppress(NoSuchWindowException, ProtocolError):
+    with suppress(*exit_exception):
         socket_loop(driver)
-    with suppress(InvalidSessionIdException, MaxRetryError):
+    with suppress(*exit_exception):
         driver.close()

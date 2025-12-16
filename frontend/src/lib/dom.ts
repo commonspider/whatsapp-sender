@@ -63,12 +63,10 @@ export function waitForElement(xpath: string) {
   });
 }
 
-export function waitForFirstElement(xpath: { [k: string]: string }) {
+export function waitForElements(xpath: string) {
   return mutationListener(() => {
-    for (const [name, xp] of Object.entries(xpath)) {
-      const element = getElementByXPath(xp);
-      if (element !== null) return [name, element];
-    }
+    const elements = getElementsByXPath(xpath);
+    if (elements.length > 0) return elements;
   });
 }
 
@@ -76,28 +74,31 @@ export async function inject(
   component:
     | ComponentType<SvelteComponent<{}>>
     | Component<{}, Record<string, any>, any>,
-  injectors: {
-    [name: string]: { xpath: string; injector: (HTMLElement) => HTMLElement };
-  },
+  xpath: string,
+  injector: (Element) => Element,
 ) {
-  const [selected, element] = await waitForFirstElement(
-    Object.fromEntries(
-      Object.entries(injectors).map(([n, { xpath }]) => [n, xpath]),
-    ),
-  );
-  const injected = await injectors[selected].injector(element);
+  const element = await waitForElement(xpath);
+  const injected = injector(element);
   mount(component, { target: injected });
   return injected;
 }
 
-export function insertBefore(anchor: HTMLElement, node: HTMLElement) {
-  anchor.parentNode?.insertBefore(node, anchor);
+export function insertBefore(anchor: Element, element: Element) {
+  anchor.parentElement?.insertBefore(element, anchor);
+  return anchor;
 }
 
-export function insertAfter(anchor: HTMLElement, node: HTMLElement) {
-  anchor.parentNode?.insertBefore(node, anchor.nextSibling);
+export function insertAfter(anchor: Element, element: Element) {
+  anchor.parentElement?.insertBefore(element, anchor.nextSibling);
+  return element;
 }
 
-export function replaceElement(element: HTMLElement, other: HTMLElement) {
-  element.parentNode?.replaceChild(other, element);
+export function replaceElement(anchor: Element, element: Element) {
+  anchor.parentElement?.replaceChild(element, anchor);
+  return element;
 }
+
+window["WhatsappSenderDOM"] = {
+  getElementsByXPath,
+  getElementByXPath,
+};

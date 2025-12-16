@@ -1,4 +1,4 @@
-# Bulk Sender
+# Whatsapp Sender
 
 ## Windows
 

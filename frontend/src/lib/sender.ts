@@ -1,5 +1,5 @@
 import { type Writable, writable } from "svelte/store";
-import { getElementByXPath, getElementsByXPath, mutationListener } from "./dom";
+import { getElementsByXPath, mutationListener } from "./dom";
 import { Socket } from "./socket";
 import { Delayer } from "./delayer";
 import type { Log } from "./log";
@@ -37,15 +37,22 @@ export class Sender {
     return this.sendCommand("click_and_type", { element, value });
   }
 
-  async sendMessages(messages: { phone: string; message: string }[]) {
+  async sendMessages(
+    messages: { phone: string; message: string }[],
+    options?: { dry: boolean },
+  ) {
     this.packets_num.set(messages.length);
     for (const { phone, message } of messages) {
-      await this.sendMessage(phone, message);
+      await this.sendMessage(phone, message, options ?? {});
       this.packets_sent.update((x) => x + 1);
     }
   }
 
-  async sendMessage(phone: string, message: string) {
+  async sendMessage(
+    phone: string,
+    message: string,
+    { dry = false }: { dry?: boolean },
+  ) {
     console.log(`Sending to ${phone}`);
     await this.delayer.wait();
     await this.click('//*[@aria-label="New chat"]');
@@ -61,7 +68,7 @@ export class Sender {
     }
     await this.click(listitems[1]);
     await this.clickAndType('//*[@aria-placeholder="Type a message"]', message);
-    await this.click('//*[@aria-label="Send"]');
+    if (!dry) await this.click('//*[@aria-label="Send"]');
     this.delayer.reset();
     return true;
   }

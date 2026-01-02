@@ -42,15 +42,24 @@
   };
 
   function sendMessages() {
+    const messages = getMessages();
+    return sender.sendMessages(messages);
+  }
+
+  function sendMessagesDry() {
+    const messages = getMessages();
+    return sender.sendMessages(messages, { dry: true });
+  }
+
+  function getMessages() {
     const phone = get(phone_column_id);
     const name = get(name_column_id);
-    const messages = get(valid_contacts).map((row) => {
+    return get(valid_contacts).map((row) => {
       return {
         phone: row[phone],
         message: user_message.replaceAll("{nome}", formatName(row[name])),
       };
     });
-    return sender.sendMessages(messages);
   }
 
   function formatName(name: string) {
@@ -93,5 +102,8 @@
   </label>
   <label>
     <button onclick={sendMessages}>Invia i messaggi</button><br />
+  </label>
+  <label>
+    <button onclick={sendMessagesDry}>Invia i messaggi (Dry Mode)</button><br />
   </label>
 </div>

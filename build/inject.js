@@ -3869,14 +3869,14 @@ class Sender {
   clickAndType(element, value) {
     return this.sendCommand("click_and_type", { element, value });
   }
-  async sendMessages(messages) {
+  async sendMessages(messages, options) {
     this.packets_num.set(messages.length);
     for (const { phone, message } of messages) {
-      await this.sendMessage(phone, message);
+      await this.sendMessage(phone, message, options ?? {});
       this.packets_sent.update((x) => x + 1);
     }
   }
-  async sendMessage(phone, message) {
+  async sendMessage(phone, message, { dry = false }) {
     console.log(`Sending to ${phone}`);
     await this.delayer.wait();
     await this.click('//*[@aria-label="New chat"]');
@@ -3892,7 +3892,7 @@ class Sender {
     }
     await this.click(listitems[1]);
     await this.clickAndType('//*[@aria-placeholder="Type a message"]', message);
-    await this.click('//*[@aria-label="Send"]');
+    if (!dry) await this.click('//*[@aria-label="Send"]');
     this.delayer.reset();
     return true;
   }
@@ -4007,7 +4007,7 @@ function parseCSV(data) {
 }
 var root_1 = /* @__PURE__ */ from_html(`<option> </option>`);
 var root_2 = /* @__PURE__ */ from_html(`<option> </option>`);
-var root = /* @__PURE__ */ from_html(`<div><label>Seleziona il file CSV con i contatti:<br/> <input type="file" accept=".csv"/><br/></label> <label>Seleziona la colonna con i nomi dei contatti:<br/> <select id="column-name"></select><br/></label> <label>Seleziona la colonna con il numero di telefono dei contatti:<br/> <select id="column-phone"></select><br/></label> <label>Numero di contatti validi:<br/> <input disabled/><br/></label> <label>Scrivi il tuo messaggio.<br/> <br/> <textarea></textarea><br/></label> <label><button>Invia i messaggi</button><br/></label></div>`);
+var root = /* @__PURE__ */ from_html(`<div><label>Seleziona il file CSV con i contatti:<br/> <input type="file" accept=".csv"/><br/></label> <label>Seleziona la colonna con i nomi dei contatti:<br/> <select id="column-name"></select><br/></label> <label>Seleziona la colonna con il numero di telefono dei contatti:<br/> <select id="column-phone"></select><br/></label> <label>Numero di contatti validi:<br/> <input disabled/><br/></label> <label>Scrivi il tuo messaggio.<br/> <br/> <textarea></textarea><br/></label> <label><button>Invia i messaggi</button><br/></label> <label><button>Invia i messaggi (Dry Mode)</button><br/></label></div>`);
 function Main($$anchor, $$props) {
   push($$props, true);
   const $column_names = () => store_get(column_names, "$column_names", $$stores);
@@ -4042,15 +4042,22 @@ function Main($$anchor, $$props) {
     contacts.set(data);
   };
   function sendMessages() {
+    const messages = getMessages();
+    return sender.sendMessages(messages);
+  }
+  function sendMessagesDry() {
+    const messages = getMessages();
+    return sender.sendMessages(messages, { dry: true });
+  }
+  function getMessages() {
     const phone = get(phone_column_id);
     const name = get(name_column_id);
-    const messages = get(valid_contacts).map((row) => {
+    return get(valid_contacts).map((row) => {
       return {
         phone: row[phone],
         message: get$1(user_message).replaceAll("{nome}", formatName(row[name]))
       };
     });
-    return sender.sendMessages(messages);
   }
   function formatName(name) {
     return String(name).charAt(0).toUpperCase() + String(name).slice(1).toLowerCase();
@@ -4096,6 +4103,9 @@ function Main($$anchor, $$props) {
   var label_5 = sibling(label_4, 2);
   var button = child(label_5);
   button.__click = sendMessages;
+  var label_6 = sibling(label_5, 2);
+  var button_1 = child(label_6);
+  button_1.__click = sendMessagesDry;
   template_effect(() => set_value(input_1, $n_contacts()));
   bind_select_value(select, () => get$1(name_column), ($$value) => set(name_column, $$value));
   bind_select_value(select_1, () => get$1(phone_column), ($$value) => set(phone_column, $$value));

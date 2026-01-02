@@ -23,7 +23,11 @@
     {:else}
       Whatsapp Sender: Finito!<br />
     {/if}
-    <progress value={$perc} max="100" style="margin-top: 1em; margin-bottom: 1em"></progress>
+    <progress
+      value={$perc}
+      max="100"
+      style="margin-top: 1em; margin-bottom: 1em"
+    ></progress>
   {:else}
     Whatsapp Sender: In attesa<br />
   {/if}

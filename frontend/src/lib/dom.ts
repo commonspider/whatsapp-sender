@@ -97,8 +97,3 @@ export function replaceElement(anchor: Element, element: Element) {
   anchor.parentElement?.replaceChild(element, anchor);
   return element;
 }
-
-window["WhatsappSenderDOM"] = {
-  getElementsByXPath,
-  getElementByXPath,
-};

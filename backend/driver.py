@@ -21,7 +21,5 @@ def make_driver(
         if headless:
             options.add_argument("--headless=new")
         driver = Chrome(options=options)
-    else:
-        raise ValueError(f"Invalid driver type {global_driver.driver_type}")
     driver.implicitly_wait(implicit_wait)
     return driver

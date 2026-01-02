@@ -4,12 +4,16 @@ var index_of = Array.prototype.indexOf;
 var array_from = Array.from;
 var define_property = Object.defineProperty;
 var get_descriptor = Object.getOwnPropertyDescriptor;
+var get_descriptors = Object.getOwnPropertyDescriptors;
 var object_prototype = Object.prototype;
 var array_prototype = Array.prototype;
 var get_prototype_of = Object.getPrototypeOf;
 var is_extensible = Object.isExtensible;
 const noop = () => {
 };
+function run(fn) {
+  return fn();
+}
 function run_all(arr) {
   for (var i = 0; i < arr.length; i++) {
     arr[i]();
@@ -186,34 +190,34 @@ function flush_tasks() {
     run_micro_tasks();
   }
 }
-function handle_error(error2) {
+function handle_error(error) {
   var effect2 = active_effect;
   if (effect2 === null) {
     active_reaction.f |= ERROR_VALUE;
-    return error2;
+    return error;
   }
   if ((effect2.f & EFFECT_RAN) === 0) {
     if ((effect2.f & BOUNDARY_EFFECT) === 0) {
-      throw error2;
+      throw error;
     }
-    effect2.b.error(error2);
+    effect2.b.error(error);
   } else {
-    invoke_error_boundary(error2, effect2);
+    invoke_error_boundary(error, effect2);
   }
 }
-function invoke_error_boundary(error2, effect2) {
+function invoke_error_boundary(error, effect2) {
   while (effect2 !== null) {
     if ((effect2.f & BOUNDARY_EFFECT) !== 0) {
       try {
-        effect2.b.error(error2);
+        effect2.b.error(error);
         return;
       } catch (e) {
-        error2 = e;
+        error = e;
       }
     }
     effect2 = effect2.parent;
   }
-  throw error2;
+  throw error;
 }
 const batches = /* @__PURE__ */ new Set();
 let current_batch = null;
@@ -615,8 +619,8 @@ function flush_effects() {
 function infinite_loop_guard() {
   try {
     effect_update_depth_exceeded();
-  } catch (error2) {
-    invoke_error_boundary(error2, last_scheduled_effect);
+  } catch (error) {
+    invoke_error_boundary(error, last_scheduled_effect);
   }
 }
 let eager_block_effects = null;
@@ -815,8 +819,8 @@ class Boundary {
         var anchor = this.#get_anchor();
         try {
           this.#main_effect = branch(() => children(anchor));
-        } catch (error2) {
-          this.error(error2);
+        } catch (error) {
+          this.error(error);
         }
         if (this.#pending_count > 0) {
           this.#show_pending_snippet();
@@ -832,8 +836,8 @@ class Boundary {
   #hydrate_resolved_content() {
     try {
       this.#main_effect = branch(() => this.#children(this.#anchor));
-    } catch (error2) {
-      this.error(error2);
+    } catch (error) {
+      this.error(error);
     }
     this.#pending = false;
   }
@@ -967,11 +971,11 @@ class Boundary {
     );
   }
   /** @param {unknown} error */
-  error(error2) {
+  error(error) {
     var onerror = this.#props.onerror;
     let failed = this.#props.failed;
     if (this.#is_creating_fallback || !onerror && !failed) {
-      throw error2;
+      throw error;
     }
     if (this.#main_effect) {
       destroy_effect(this.#main_effect);
@@ -1018,10 +1022,10 @@ class Boundary {
     try {
       set_active_reaction(null);
       calling_on_error = true;
-      onerror?.(error2, reset);
+      onerror?.(error, reset);
       calling_on_error = false;
-    } catch (error3) {
-      invoke_error_boundary(error3, this.#effect && this.#effect.parent);
+    } catch (error2) {
+      invoke_error_boundary(error2, this.#effect && this.#effect.parent);
     } finally {
       set_active_reaction(previous_reaction);
     }
@@ -1034,13 +1038,13 @@ class Boundary {
             return branch(() => {
               failed(
                 this.#anchor,
-                () => error2,
+                () => error,
                 () => reset
               );
             });
-          } catch (error3) {
+          } catch (error2) {
             invoke_error_boundary(
-              error3,
+              error2,
               /** @type {Effect} */
               this.#effect.parent
             );
@@ -1065,34 +1069,34 @@ function flatten(blockers, sync, async, fn) {
     active_effect
   );
   var restore = capture();
-  function run() {
+  function run2() {
     Promise.all(async.map((expression) => /* @__PURE__ */ async_derived(expression))).then((result) => {
       restore();
       try {
         fn([...sync.map(d), ...result]);
-      } catch (error2) {
+      } catch (error) {
         if ((parent.f & DESTROYED) === 0) {
-          invoke_error_boundary(error2, parent);
+          invoke_error_boundary(error, parent);
         }
       }
       batch?.deactivate();
       unset_context();
-    }).catch((error2) => {
-      invoke_error_boundary(error2, parent);
+    }).catch((error) => {
+      invoke_error_boundary(error, parent);
     });
   }
   if (blockers.length > 0) {
     Promise.all(blockers).then(() => {
       restore();
       try {
-        return run();
+        return run2();
       } finally {
         batch?.deactivate();
         unset_context();
       }
     });
   } else {
-    run();
+    run2();
   }
 }
 function capture() {
@@ -1175,8 +1179,8 @@ function async_derived(fn, location) {
         }
         unset_context();
       });
-    } catch (error2) {
-      d.reject(error2);
+    } catch (error) {
+      d.reject(error);
       unset_context();
     }
     var batch = (
@@ -1191,12 +1195,12 @@ function async_derived(fn, location) {
       deferreds.delete(batch);
       deferreds.set(batch, d);
     }
-    const handler = (value, error2 = void 0) => {
+    const handler = (value, error = void 0) => {
       batch.activate();
-      if (error2) {
-        if (error2 !== STALE_REACTION) {
+      if (error) {
+        if (error !== STALE_REACTION) {
           signal.f |= ERROR_VALUE;
-          internal_set(signal, error2);
+          internal_set(signal, error);
         }
       } else {
         if ((signal.f & ERROR_VALUE) !== 0) {
@@ -1865,6 +1869,10 @@ function user_effect(fn) {
 function create_user_effect(fn) {
   return create_effect(EFFECT | USER_EFFECT, fn, false);
 }
+function user_pre_effect(fn) {
+  validate_effect();
+  return create_effect(RENDER_EFFECT | USER_EFFECT, fn, true);
+}
 function component_root(fn) {
   Batch.ensure();
   const effect2 = create_effect(ROOT_EFFECT | EFFECT_PRESERVED, fn, true);
@@ -2250,8 +2258,8 @@ function update_reaction(reaction) {
       reaction.f ^= ERROR_VALUE;
     }
     return result;
-  } catch (error2) {
-    return handle_error(error2);
+  } catch (error) {
+    return handle_error(error);
   } finally {
     reaction.f ^= REACTION_IS_UPDATING;
     new_deps = previous_deps;
@@ -2441,6 +2449,49 @@ const STATUS_MASK = -7169;
 function set_signal_status(signal, status) {
   signal.f = signal.f & STATUS_MASK | status;
 }
+function deep_read_state(value) {
+  if (typeof value !== "object" || !value || value instanceof EventTarget) {
+    return;
+  }
+  if (STATE_SYMBOL in value) {
+    deep_read(value);
+  } else if (!Array.isArray(value)) {
+    for (let key in value) {
+      const prop = value[key];
+      if (typeof prop === "object" && prop && STATE_SYMBOL in prop) {
+        deep_read(prop);
+      }
+    }
+  }
+}
+function deep_read(value, visited = /* @__PURE__ */ new Set()) {
+  if (typeof value === "object" && value !== null && // We don't want to traverse DOM elements
+  !(value instanceof EventTarget) && !visited.has(value)) {
+    visited.add(value);
+    if (value instanceof Date) {
+      value.getTime();
+    }
+    for (let key in value) {
+      try {
+        deep_read(value[key], visited);
+      } catch (e) {
+      }
+    }
+    const proto = get_prototype_of(value);
+    if (proto !== Object.prototype && proto !== Array.prototype && proto !== Map.prototype && proto !== Set.prototype && proto !== Date.prototype) {
+      const descriptors = get_descriptors(proto);
+      for (let key in descriptors) {
+        const get2 = descriptors[key].get;
+        if (get2) {
+          try {
+            get2.call(value);
+          } catch (e) {
+          }
+        }
+      }
+    }
+  }
+}
 const PASSIVE_EVENTS = ["touchstart", "touchmove"];
 function is_passive_event(name) {
   return PASSIVE_EVENTS.includes(name);
@@ -2513,11 +2564,11 @@ function handle_event_propagation(event) {
         event.target === current_target)) {
           delegated.call(current_target, event);
         }
-      } catch (error2) {
+      } catch (error) {
         if (throw_error) {
-          other_errors.push(error2);
+          other_errors.push(error);
         } else {
-          throw_error = error2;
+          throw_error = error;
         }
       }
       if (event.cancelBubble || parent_element === handler_element || parent_element === null) {
@@ -2526,9 +2577,9 @@ function handle_event_propagation(event) {
       current_target = parent_element;
     }
     if (throw_error) {
-      for (let error2 of other_errors) {
+      for (let error of other_errors) {
         queueMicrotask(() => {
-          throw error2;
+          throw error;
         });
       }
       throw throw_error;
@@ -3386,15 +3437,72 @@ function is_numberlike_input(input) {
 function to_number(value) {
   return value === "" ? null : +value;
 }
-function subscribe_to_store(store, run, invalidate) {
+function init(immutable = false) {
+  const context = (
+    /** @type {ComponentContextLegacy} */
+    component_context
+  );
+  const callbacks = context.l.u;
+  if (!callbacks) return;
+  let props = () => deep_read_state(context.s);
+  if (immutable) {
+    let version = 0;
+    let prev = (
+      /** @type {Record<string, any>} */
+      {}
+    );
+    const d = /* @__PURE__ */ derived$1(() => {
+      let changed = false;
+      const props2 = context.s;
+      for (const key in props2) {
+        if (props2[key] !== prev[key]) {
+          prev[key] = props2[key];
+          changed = true;
+        }
+      }
+      if (changed) version++;
+      return version;
+    });
+    props = () => get$1(d);
+  }
+  if (callbacks.b.length) {
+    user_pre_effect(() => {
+      observe_all(context, props);
+      run_all(callbacks.b);
+    });
+  }
+  user_effect(() => {
+    const fns = untrack(() => callbacks.m.map(run));
+    return () => {
+      for (const fn of fns) {
+        if (typeof fn === "function") {
+          fn();
+        }
+      }
+    };
+  });
+  if (callbacks.a.length) {
+    user_effect(() => {
+      observe_all(context, props);
+      run_all(callbacks.a);
+    });
+  }
+}
+function observe_all(context, props) {
+  if (context.l.s) {
+    for (const signal of context.l.s) get$1(signal);
+  }
+  props();
+}
+function subscribe_to_store(store, run2, invalidate) {
   if (store == null) {
-    run(void 0);
+    run2(void 0);
     if (invalidate) invalidate(void 0);
     return noop;
   }
   const unsub = untrack(
     () => store.subscribe(
-      run,
+      run2,
       // @ts-expect-error
       invalidate
     )
@@ -3434,13 +3542,13 @@ function writable(value, start = noop) {
       value
     ));
   }
-  function subscribe(run, invalidate = noop) {
-    const subscriber = [run, invalidate];
+  function subscribe(run2, invalidate = noop) {
+    const subscriber = [run2, invalidate];
     subscribers.add(subscriber);
     if (subscribers.size === 1) {
       stop = start(set2, update) || noop;
     }
-    run(
+    run2(
       /** @type {T} */
       value
     );
@@ -3617,92 +3725,139 @@ function replaceElement(anchor, element) {
   anchor.parentElement?.replaceChild(element, anchor);
   return element;
 }
-window["WhatsappSenderDOM"] = {
-  getElementsByXPath,
-  getElementByXPath
-};
 const PUBLIC_VERSION = "5";
 if (typeof window !== "undefined") {
   ((window.__svelte ??= {}).v ??= /* @__PURE__ */ new Set()).add(PUBLIC_VERSION);
 }
 enable_legacy_mode_flag();
-function log(message) {
-  console.log("Whatsapp Sender:", message);
-}
-function error(message) {
-  console.error("Whatsapp Sender:", message);
-}
-let command_index_counter = 0;
 class Socket {
-  commands;
-  resolves;
-  constructor() {
-    this.commands = [];
-    this.resolves = /* @__PURE__ */ new Map();
+  buffer_out;
+  request_callbacks;
+  request_rejects;
+  callback;
+  constructor(callback) {
+    this.buffer_out = [];
+    this.request_callbacks = /* @__PURE__ */ new Map();
+    this.request_rejects = /* @__PURE__ */ new Map();
+    this.callback = callback;
   }
-  async execute(type, data) {
-    const result = await new Promise((resolve) => {
-      const id = command_index_counter;
-      command_index_counter++;
-      this.resolves.set(id, resolve);
-      this.commands.push({ id, type, data });
+  send(data) {
+    return new Promise((resolve, reject) => {
+      const uid = crypto.randomUUID().toString();
+      this.request_callbacks.set(uid, [resolve, reject]);
+      this.buffer_out.push({ type: "request", uid, data });
     });
-    if (!result) throw new Error("Command failed");
   }
-  getCommand(callback) {
-    const command = this.commands.shift();
-    callback(command);
+  communicate(packets) {
+    for (const { type, uid, data } of packets) {
+      if (type === "response") {
+        const callbacks = this.request_callbacks.get(uid);
+        if (callbacks === void 0) continue;
+        this.request_callbacks.delete(uid);
+        callbacks[0](data);
+      } else if (type === "exception") {
+        const callbacks = this.request_callbacks.get(uid);
+        if (callbacks === void 0) continue;
+        this.request_callbacks.delete(uid);
+        callbacks[1](data);
+      } else if (type === "request") {
+        this.callback(data).then(
+          (data2) => this.buffer_out.push({ type: "response", uid, data: data2 }),
+          (exception) => this.buffer_out.push({
+            type: "exception",
+            uid,
+            data: exception.toString()
+          })
+        );
+      }
+    }
+    const buffer = this.buffer_out;
+    this.buffer_out = [];
+    return buffer;
   }
-  sendResult(id, data) {
-    const resolve = this.resolves.get(id);
-    if (resolve == void 0) {
-      error("No resolve found for command id: " + id);
-    } else {
-      this.resolves.delete(id);
-      resolve(data);
+}
+function timestamp() {
+  return Date.now() / 1e3;
+}
+function sleep(seconds) {
+  if (sleep > 0)
+    return new Promise((resolve) => setTimeout(resolve, seconds * 1e3));
+  else return Promise.resolve();
+}
+class Delayer {
+  delay;
+  sleep_until;
+  constructor(delay) {
+    this.delay = delay;
+    this.sleep_until = 0;
+  }
+  async wait() {
+    await sleep(this.sleep_until - timestamp());
+  }
+  done() {
+    this.sleep_until = timestamp() + this.delay;
+  }
+}
+class Sender {
+  socket;
+  packets_num;
+  packets_sent;
+  delayer;
+  constructor({ send_delay }) {
+    this.socket = new Socket(this.parseCommand);
+    this.packets_num = writable(0);
+    this.packets_sent = writable(0);
+    this.delayer = new Delayer(send_delay);
+  }
+  async parseCommand(command) {
+    throw new Error("Not implemented.");
+  }
+  sendCommand(type, data) {
+    return this.socket.send({ type, data });
+  }
+  click(element) {
+    return this.sendCommand("click", element);
+  }
+  clickAndType(element, value) {
+    return this.sendCommand("click_and_type", { element, value });
+  }
+  async sendMessages(messages) {
+    this.packets_num.set(messages.length);
+    for (const { phone, message } of messages) {
+      await this.sendMessage(phone, message);
+      this.packets_sent.update((x) => x + 1);
     }
   }
-}
-const socket = new Socket();
-window["WhatsappSenderSocket"] = socket;
-function sleep(seconds) {
-  return new Promise((resolve) => setTimeout(resolve, seconds * 1e3));
-}
-const n_packets = writable(0);
-const packets_sent = writable(0);
-async function sendPackets(packets) {
-  n_packets.set(packets.length);
-  for (const { phone, message } of packets) {
-    const result = await sendPacket(phone, message);
-    if (result) packets_sent.update((x) => x + 1);
-    else n_packets.update((x) => x - 1);
-    await sleep(10);
+  async sendMessage(phone, message) {
+    await this.delayer.wait();
+    await this.click('//*[@aria-label="New chat"]');
+    await this.clickAndType('//*[@aria-label="Search name or number"]', phone);
+    const listitems = await mutationListener(() => {
+      const items = getElementsByXPath('//*[@role="listitem"]');
+      if (items.length <= 2) return items;
+    });
+    if (listitems.length != 2) return false;
+    await this.click(listitems[1]);
+    await this.clickAndType('//*[@aria-placeholder="Type a message"]', message);
+    await this.click('//*[@aria-label="Send"]');
+    this.delayer.done();
+    return true;
   }
 }
-async function sendPacket(phone, message) {
-  await socket.execute("click", '//*[@aria-label="New chat"]');
-  await socket.execute("click_and_type", {
-    element: '//*[@aria-label="Search name or number"]',
-    value: phone
-  });
-  const listitems = await mutationListener(() => {
-    const items = getElementsByXPath('//*[@role="listitem"]');
-    if (items.length <= 2) return items;
-  });
-  if (listitems.length != 2) return false;
-  await socket.execute("click", listitems[1]);
-  await socket.execute("click_and_type", {
-    element: '//*[@aria-placeholder="Type a message"]',
-    value: message
-  });
-  await socket.execute("click", '//*[@aria-label="Send"]');
-  return true;
-}
+const sender = new Sender({
+  send_delay: 10
+});
+const socket = sender.socket;
+window["WhatsappSender"] = { socket, sender };
 var root$1 = /* @__PURE__ */ from_html(`<div style="margin: 0.5em; padding: 0.5em; border: 3px solid green; background: lightgreen; border-radius: 10px;"><!></div>`);
-function SidebarWidget($$anchor) {
-  const $n_packets = () => store_get(n_packets, "$n_packets", $$stores);
-  const $packets_sent = () => store_get(packets_sent, "$packets_sent", $$stores);
+function SidebarWidget($$anchor, $$props) {
+  push($$props, false);
+  const $packet_num = () => store_get(packet_num, "$packet_num", $$stores);
+  const $packet_sent = () => store_get(packet_sent, "$packet_sent", $$stores);
   const [$$stores, $$cleanup] = setup_stores();
+  const packet_num = sender.packets_num;
+  const packet_sent = sender.packets_sent;
+  init();
   var div = root$1();
   var node = child(div);
   {
@@ -3712,7 +3867,7 @@ function SidebarWidget($$anchor) {
       {
         var consequent = ($$anchor3) => {
           var text$1 = text();
-          template_effect(() => set_text(text$1, `Whatsapp Sender: ${$packets_sent() ?? ""} / ${$n_packets() ?? ""}`));
+          template_effect(() => set_text(text$1, `Whatsapp Sender: ${$packet_sent() ?? ""} / ${$packet_num() ?? ""}`));
           append($$anchor3, text$1);
         };
         var alternate = ($$anchor3) => {
@@ -3720,7 +3875,7 @@ function SidebarWidget($$anchor) {
           append($$anchor3, text_1);
         };
         if_block(node_1, ($$render) => {
-          if ($packets_sent() < $n_packets()) $$render(consequent);
+          if ($packet_sent() < $packet_num()) $$render(consequent);
           else $$render(alternate, false);
         });
       }
@@ -3731,11 +3886,12 @@ function SidebarWidget($$anchor) {
       append($$anchor2, text_2);
     };
     if_block(node, ($$render) => {
-      if ($n_packets() > 0) $$render(consequent_1);
+      if ($packet_num() > 0) $$render(consequent_1);
       else $$render(alternate_1, false);
     });
   }
   append($$anchor, div);
+  pop();
   $$cleanup();
 }
 function parseCSV(data) {
@@ -3784,13 +3940,13 @@ function Main($$anchor, $$props) {
   function sendMessages() {
     const phone = get(phone_column_id);
     const name = get(name_column_id);
-    const packets = get(valid_contacts).map((row) => {
+    const messages = get(valid_contacts).map((row) => {
       return {
         phone: row[phone],
         message: get$1(user_message).replaceAll("{nome}", formatName(row[name]))
       };
     });
-    sendPackets(packets);
+    return sender.sendMessages(messages);
   }
   function formatName(name) {
     return String(name).charAt(0).toUpperCase() + String(name).slice(1).toLowerCase();
@@ -3845,14 +4001,17 @@ function Main($$anchor, $$props) {
   $$cleanup();
 }
 delegate(["change", "click"]);
-inject(Main, '//h1[contains(text(),"WhatsApp Web")]', (element) => {
-  const anchor = document.createElement("div");
-  const container = element.parentElement?.parentElement?.parentElement;
+function log(message) {
+  console.log("Whatsapp Sender:", message);
+}
+inject(Main, '//h1[contains(text(),"WhatsApp Web")]', (anchor) => {
+  const element = document.createElement("div");
+  const container = anchor.parentElement?.parentElement?.parentElement;
   if (container === void 0 || container === null)
     throw new Error("Could not inject main");
-  else return replaceElement(container, anchor);
+  else return replaceElement(container, element);
 }).then(() => log("Main injected"));
-inject(SidebarWidget, '//*[@aria-label="chat-list-filters"]', (element) => {
-  const anchor = document.createElement("div");
-  return insertBefore(element, anchor);
-}).then((_) => log("SidebarWidget injected"));
+inject(SidebarWidget, '//*[@aria-label="chat-list-filters"]', (anchor) => {
+  const element = document.createElement("div");
+  return insertBefore(anchor, element);
+}).then(() => log("SidebarWidget injected"));

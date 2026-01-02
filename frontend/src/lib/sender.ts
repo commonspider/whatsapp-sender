@@ -1,45 +1,60 @@
-import { writable } from "svelte/store";
-import { sleep } from "./utils";
-import { socket } from "./socket";
-import {
-  getElementsByXPath,
-  mutationListener,
-  waitForElement,
-  waitForElements,
-} from "./dom";
+import { type Writable, writable } from "svelte/store";
+import { getElementsByXPath, mutationListener } from "./dom";
+import { Socket } from "./socket";
+import { Delayer } from "./utils";
 
-export const n_packets = writable(0);
-export const packets_sent = writable(0);
+type CommandType = "click" | "click_and_type";
 
-export async function sendPackets(
-  packets: { phone: string; message: string }[],
-) {
-  n_packets.set(packets.length);
-  for (const { phone, message } of packets) {
-    const result = await sendPacket(phone, message);
-    if (result) packets_sent.update((x) => x + 1);
-    else n_packets.update((x) => x - 1);
-    await sleep(10);
+export class Sender {
+  socket: Socket;
+  packets_num: Writable<number>;
+  packets_sent: Writable<number>;
+  delayer: Delayer;
+
+  constructor({ send_delay }: { send_delay: number }) {
+    this.socket = new Socket(this.parseCommand);
+    this.packets_num = writable(0);
+    this.packets_sent = writable(0);
+    this.delayer = new Delayer(send_delay);
   }
-}
 
-async function sendPacket(phone: string, message: string) {
-  await socket.execute("click", '//*[@aria-label="New chat"]');
-  await socket.execute("click_and_type", {
-    element: '//*[@aria-label="Search name or number"]',
-    value: phone,
-  });
-  const listitems = await mutationListener(() => {
-    const items = getElementsByXPath('//*[@role="listitem"]');
-    if (items.length <= 2) return items;
-  });
-  if (listitems.length != 2) return false;
+  async parseCommand(command: any) {
+    throw new Error("Not implemented.");
+  }
 
-  await socket.execute("click", listitems[1]);
-  await socket.execute("click_and_type", {
-    element: '//*[@aria-placeholder="Type a message"]',
-    value: message,
-  });
-  await socket.execute("click", '//*[@aria-label="Send"]');
-  return true;
+  sendCommand(type: CommandType, data: any) {
+    return this.socket.send({ type, data });
+  }
+
+  click(element: string | HTMLElement) {
+    return this.sendCommand("click", element);
+  }
+
+  clickAndType(element: string | HTMLElement, value: string) {
+    return this.sendCommand("click_and_type", { element, value });
+  }
+
+  async sendMessages(messages: { phone: string; message: string }[]) {
+    this.packets_num.set(messages.length);
+    for (const { phone, message } of messages) {
+      await this.sendMessage(phone, message);
+      this.packets_sent.update((x) => x + 1);
+    }
+  }
+
+  async sendMessage(phone: string, message: string) {
+    await this.delayer.wait();
+    await this.click('//*[@aria-label="New chat"]');
+    await this.clickAndType('//*[@aria-label="Search name or number"]', phone);
+    const listitems = await mutationListener(() => {
+      const items = getElementsByXPath('//*[@role="listitem"]');
+      if (items.length <= 2) return items;
+    });
+    if (listitems.length != 2) return false;
+    await this.click(listitems[1]);
+    await this.clickAndType('//*[@aria-placeholder="Type a message"]', message);
+    await this.click('//*[@aria-label="Send"]');
+    this.delayer.done();
+    return true;
+  }
 }

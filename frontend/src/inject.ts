@@ -3,19 +3,19 @@ import SidebarWidget from "./components/SidebarWidget.svelte";
 import Main from "./components/Main.svelte";
 import { log } from "./lib/log";
 
-// MAIN
+// Main
 
-inject(Main, '//h1[contains(text(),"WhatsApp Web")]', (element) => {
-  const anchor = document.createElement("div");
-  const container = element.parentElement?.parentElement?.parentElement;
+inject(Main, '//h1[contains(text(),"WhatsApp Web")]', (anchor) => {
+  const element = document.createElement("div");
+  const container = anchor.parentElement?.parentElement?.parentElement;
   if (container === undefined || container === null)
     throw new Error("Could not inject main");
-  else return replaceElement(container, anchor);
+  else return replaceElement(container, element);
 }).then(() => log("Main injected"));
 
-// SIDEBAR WIDGET
+// Sidebar Widget
 
-inject(SidebarWidget, '//*[@aria-label="chat-list-filters"]', (element) => {
-  const anchor = document.createElement("div");
-  return insertBefore(element, anchor);
-}).then((_) => log("SidebarWidget injected"));
+inject(SidebarWidget, '//*[@aria-label="chat-list-filters"]', (anchor) => {
+  const element = document.createElement("div");
+  return insertBefore(anchor, element);
+}).then(() => log("SidebarWidget injected"));

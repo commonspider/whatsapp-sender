@@ -1,14 +1,16 @@
 <script lang="ts">
-  import { socket } from "../lib/socket";
-  import { n_packets, packets_sent } from "../lib/sender";
+  import { sender } from "../singletons";
+
+  const packet_num = sender.packets_num;
+  const packet_sent = sender.packets_sent;
 </script>
 
 <div
   style="margin: 0.5em; padding: 0.5em; border: 3px solid green; background: lightgreen; border-radius: 10px;"
 >
-  {#if $n_packets > 0}
-    {#if $packets_sent < $n_packets}
-      Whatsapp Sender: {$packets_sent} / {$n_packets}
+  {#if $packet_num > 0}
+    {#if $packet_sent < $packet_num}
+      Whatsapp Sender: {$packet_sent} / {$packet_num}
     {:else}
       Whatsapp Sender: Finito!
     {/if}

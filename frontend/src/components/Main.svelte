@@ -1,7 +1,7 @@
 <script lang="ts">
   import { parseCSV } from "../lib/csv";
   import { writable, derived, get } from "svelte/store";
-  import { sendPackets } from "../lib/sender";
+  import { sender } from "../singletons";
 
   const column_names = writable([]);
   const contacts = writable([]);
@@ -44,14 +44,15 @@
   function sendMessages() {
     const phone = get(phone_column_id);
     const name = get(name_column_id);
-    const packets = get(valid_contacts).map((row) => {
+    const messages = get(valid_contacts).map((row) => {
       return {
         phone: row[phone],
         message: user_message.replaceAll("{nome}", formatName(row[name])),
       };
     });
-    sendPackets(packets);
+    return sender.sendMessages(messages);
   }
+
   function formatName(name: string) {
     return (
       String(name).charAt(0).toUpperCase() + String(name).slice(1).toLowerCase()

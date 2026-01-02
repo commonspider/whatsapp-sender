@@ -1,7 +1,17 @@
-export function log(message: string) {
-  console.log("Whatsapp Sender:", message);
-}
+import type { Writable } from "svelte/store";
+import { writable } from "svelte/store";
 
-export function error(message: string) {
-  console.error("Whatsapp Sender:", message);
+export class Log {
+  lines: Writable<string[]>;
+
+  constructor() {
+    this.lines = writable([]);
+  }
+
+  log(message: string) {
+    this.lines.update((lines) => {
+      lines.push(message);
+      return lines;
+    });
+  }
 }

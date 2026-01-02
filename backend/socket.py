@@ -50,8 +50,10 @@ class Socket:
                     'callback({data: result});\n',
                     buffer_out
                 )
+                if buffer_in is None:
+                    break
                 executor.map(self._receive_packet, buffer_in["data"])
-                time.sleep(0.1)
+                time.sleep(0.5)
 
     def _receive_packet(self, packet: Packet):
         typ = packet["type"]

@@ -105,7 +105,10 @@ function svelte_boundary_reset_onerror() {
 }
 const EACH_ITEM_REACTIVE = 1;
 const EACH_INDEX_REACTIVE = 1 << 1;
+const EACH_IS_CONTROLLED = 1 << 2;
+const EACH_IS_ANIMATED = 1 << 3;
 const EACH_ITEM_IMMUTABLE = 1 << 4;
+const TEMPLATE_FRAGMENT = 1;
 const TEMPLATE_USE_IMPORT_NODE = 1 << 1;
 const UNINITIALIZED = /* @__PURE__ */ Symbol();
 const NAMESPACE_HTML = "http://www.w3.org/1999/xhtml";
@@ -2607,20 +2610,31 @@ function assign_nodes(start, end) {
 }
 // @__NO_SIDE_EFFECTS__
 function from_html(content, flags2) {
+  var is_fragment = (flags2 & TEMPLATE_FRAGMENT) !== 0;
   var use_import_node = (flags2 & TEMPLATE_USE_IMPORT_NODE) !== 0;
   var node;
   var has_start = !content.startsWith("<!>");
   return () => {
     if (node === void 0) {
       node = create_fragment_from_html(has_start ? content : "<!>" + content);
-      node = /** @type {TemplateNode} */
+      if (!is_fragment) node = /** @type {TemplateNode} */
       /* @__PURE__ */ get_first_child(node);
     }
     var clone = (
       /** @type {TemplateNode} */
       use_import_node || is_firefox ? document.importNode(node, true) : node.cloneNode(true)
     );
-    {
+    if (is_fragment) {
+      var start = (
+        /** @type {TemplateNode} */
+        /* @__PURE__ */ get_first_child(clone)
+      );
+      var end = (
+        /** @type {TemplateNode} */
+        clone.lastChild
+      );
+      assign_nodes(start, end);
+    } else {
       assign_nodes(clone, clone);
     }
     return clone;
@@ -2632,14 +2646,6 @@ function text(value = "") {
     assign_nodes(t, t);
     return t;
   }
-}
-function comment() {
-  var frag = document.createDocumentFragment();
-  var start = document.createComment("");
-  var anchor = create_text();
-  frag.append(start, anchor);
-  assign_nodes(start, anchor);
-  return frag;
 }
 function append(anchor, dom) {
   if (anchor === null) {
@@ -2983,7 +2989,8 @@ var offscreen_anchor;
 function each(node, flags2, get_collection, get_key, render_fn, fallback_fn = null) {
   var anchor = node;
   var items = /* @__PURE__ */ new Map();
-  {
+  var is_controlled = (flags2 & EACH_IS_CONTROLLED) !== 0;
+  if (is_controlled) {
     var parent_node = (
       /** @type {Element} */
       node
@@ -3081,17 +3088,31 @@ function each(node, flags2, get_collection, get_key, render_fn, fallback_fn = nu
   first_run = false;
 }
 function reconcile(state2, array, anchor, flags2, get_key) {
+  var is_animated = (flags2 & EACH_IS_ANIMATED) !== 0;
   var length = array.length;
   var items = state2.items;
   var current = state2.effect.first;
   var seen;
   var prev = null;
+  var to_animate;
   var matched = [];
   var stashed = [];
   var value;
   var key;
   var effect2;
   var i;
+  if (is_animated) {
+    for (i = 0; i < length; i += 1) {
+      value = array[i];
+      key = get_key(value, i);
+      effect2 = /** @type {EachItem} */
+      items.get(key).e;
+      if ((effect2.f & EFFECT_OFFSCREEN) === 0) {
+        effect2.nodes?.a?.measure();
+        (to_animate ??= /* @__PURE__ */ new Set()).add(effect2);
+      }
+    }
+  }
   for (i = 0; i < length; i += 1) {
     value = array[i];
     key = get_key(value, i);
@@ -3126,6 +3147,10 @@ function reconcile(state2, array, anchor, flags2, get_key) {
     }
     if ((effect2.f & INERT) !== 0) {
       resume_effect(effect2);
+      if (is_animated) {
+        effect2.nodes?.a?.unfix();
+        (to_animate ??= /* @__PURE__ */ new Set()).delete(effect2);
+      }
     }
     if (effect2 !== current) {
       if (seen !== void 0 && seen.has(effect2)) {
@@ -3204,9 +3229,25 @@ function reconcile(state2, array, anchor, flags2, get_key) {
     }
     var destroy_length = to_destroy.length;
     if (destroy_length > 0) {
-      var controlled_anchor = length === 0 ? anchor : null;
+      var controlled_anchor = (flags2 & EACH_IS_CONTROLLED) !== 0 && length === 0 ? anchor : null;
+      if (is_animated) {
+        for (i = 0; i < destroy_length; i += 1) {
+          to_destroy[i].nodes?.a?.measure();
+        }
+        for (i = 0; i < destroy_length; i += 1) {
+          to_destroy[i].nodes?.a?.fix();
+        }
+      }
       pause_effects(state2, to_destroy, controlled_anchor);
     }
+  }
+  if (is_animated) {
+    queue_micro_task(() => {
+      if (to_animate === void 0) return;
+      for (effect2 of to_animate) {
+        effect2.nodes?.a?.apply();
+      }
+    });
   }
 }
 function create_item(items, anchor, value, key, index2, render_fn, flags2, get_collection) {
@@ -3776,26 +3817,31 @@ class Socket {
     return buffer;
   }
 }
-function timestamp() {
-  return Date.now() / 1e3;
-}
-function sleep(seconds) {
-  if (sleep > 0)
-    return new Promise((resolve) => setTimeout(resolve, seconds * 1e3));
-  else return Promise.resolve();
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 class Delayer {
   delay;
   sleep_until;
-  constructor(delay) {
+  countdown;
+  countdown_delay;
+  constructor(delay, countdown_delay = 1e3) {
     this.delay = delay;
     this.sleep_until = 0;
+    this.countdown = writable();
+    this.countdown_delay = countdown_delay;
   }
   async wait() {
-    await sleep(this.sleep_until - timestamp());
+    while (true) {
+      const total_delay = this.sleep_until - Date.now();
+      if (total_delay <= 0) break;
+      this.countdown.set(total_delay);
+      await sleep(Math.min(this.countdown_delay, total_delay));
+    }
+    this.countdown.set(void 0);
   }
-  done() {
-    this.sleep_until = timestamp() + this.delay;
+  reset() {
+    this.sleep_until = Date.now() + this.delay;
   }
 }
 class Sender {
@@ -3803,11 +3849,13 @@ class Sender {
   packets_num;
   packets_sent;
   delayer;
-  constructor({ send_delay }) {
+  log;
+  constructor({ send_delay, log: log2 }) {
     this.socket = new Socket(this.parseCommand);
     this.packets_num = writable(0);
     this.packets_sent = writable(0);
-    this.delayer = new Delayer(send_delay);
+    this.delayer = new Delayer(send_delay * 1e3);
+    this.log = log2;
   }
   async parseCommand(command) {
     throw new Error("Not implemented.");
@@ -3829,6 +3877,7 @@ class Sender {
     }
   }
   async sendMessage(phone, message) {
+    console.log(`Sending to ${phone}`);
     await this.delayer.wait();
     await this.click('//*[@aria-label="New chat"]');
     await this.clickAndType('//*[@aria-label="Search name or number"]', phone);
@@ -3836,60 +3885,115 @@ class Sender {
       const items = getElementsByXPath('//*[@role="listitem"]');
       if (items.length <= 2) return items;
     });
-    if (listitems.length != 2) return false;
+    if (listitems.length != 2) {
+      await this.click('//*[@aria-label="Back"]');
+      this.log.log(`${phone} non ha Whatsapp.`);
+      return false;
+    }
     await this.click(listitems[1]);
     await this.clickAndType('//*[@aria-placeholder="Type a message"]', message);
     await this.click('//*[@aria-label="Send"]');
-    this.delayer.done();
+    this.delayer.reset();
     return true;
   }
 }
+class Log {
+  lines;
+  constructor() {
+    this.lines = writable([]);
+  }
+  log(message) {
+    this.lines.update((lines) => {
+      lines.push(message);
+      return lines;
+    });
+  }
+}
+const log = new Log();
 const sender = new Sender({
-  send_delay: 10
+  send_delay: 20,
+  log
 });
 const socket = sender.socket;
-window["WhatsappSender"] = { socket, sender };
-var root$1 = /* @__PURE__ */ from_html(`<div style="margin: 0.5em; padding: 0.5em; border: 3px solid green; background: lightgreen; border-radius: 10px;"><!></div>`);
+window["WhatsappSender"] = {
+  socket,
+  sender,
+  dom: { getElementByXPath, getElementsByXPath },
+  log
+};
+var root_2$1 = /* @__PURE__ */ from_html(` <!> <br/>`, 1);
+var root_4 = /* @__PURE__ */ from_html(`Whatsapp Sender: Finito!<br/>`, 1);
+var root_1$1 = /* @__PURE__ */ from_html(`<!> <progress max="100" style="margin-top: 1em; margin-bottom: 1em"></progress>`, 1);
+var root_5 = /* @__PURE__ */ from_html(`Whatsapp Sender: In attesa<br/>`, 1);
+var root_6 = /* @__PURE__ */ from_html(` <br/>`, 1);
+var root$1 = /* @__PURE__ */ from_html(`<div style="width: 100%; margin-top: 2em; margin-bottom: 2em;"><!> <!></div>`);
 function SidebarWidget($$anchor, $$props) {
   push($$props, false);
   const $packet_num = () => store_get(packet_num, "$packet_num", $$stores);
   const $packet_sent = () => store_get(packet_sent, "$packet_sent", $$stores);
+  const $countdown = () => store_get(countdown, "$countdown", $$stores);
+  const $perc = () => store_get(perc, "$perc", $$stores);
+  const $lines = () => store_get(lines, "$lines", $$stores);
   const [$$stores, $$cleanup] = setup_stores();
   const packet_num = sender.packets_num;
   const packet_sent = sender.packets_sent;
+  const perc = derived([packet_num, packet_sent], ([num, sent]) => sent * 100 / num);
+  const countdown = sender.delayer.countdown;
+  const lines = log.lines;
   init();
   var div = root$1();
   var node = child(div);
   {
-    var consequent_1 = ($$anchor2) => {
-      var fragment = comment();
+    var consequent_2 = ($$anchor2) => {
+      var fragment = root_1$1();
       var node_1 = first_child(fragment);
       {
-        var consequent = ($$anchor3) => {
-          var text$1 = text();
-          template_effect(() => set_text(text$1, `Whatsapp Sender: ${$packet_sent() ?? ""} / ${$packet_num() ?? ""}`));
-          append($$anchor3, text$1);
+        var consequent_1 = ($$anchor3) => {
+          var fragment_1 = root_2$1();
+          var text$1 = first_child(fragment_1);
+          var node_2 = sibling(text$1);
+          {
+            var consequent = ($$anchor4) => {
+              var text_1 = text();
+              template_effect(($0) => set_text(text_1, `Cooldown: ${$0 ?? ""}...`), [() => Math.round($countdown() / 1e3)]);
+              append($$anchor4, text_1);
+            };
+            if_block(node_2, ($$render) => {
+              if ($countdown() !== void 0) $$render(consequent);
+            });
+          }
+          template_effect(() => set_text(text$1, `Whatsapp Sender: [ ${$packet_sent() ?? ""} / ${$packet_num() ?? ""} ] `));
+          append($$anchor3, fragment_1);
         };
         var alternate = ($$anchor3) => {
-          var text_1 = text("Whatsapp Sender: Finito!");
-          append($$anchor3, text_1);
+          var fragment_3 = root_4();
+          append($$anchor3, fragment_3);
         };
         if_block(node_1, ($$render) => {
-          if ($packet_sent() < $packet_num()) $$render(consequent);
+          if ($packet_sent() < $packet_num()) $$render(consequent_1);
           else $$render(alternate, false);
         });
       }
+      var progress = sibling(node_1, 2);
+      template_effect(() => set_value(progress, $perc()));
       append($$anchor2, fragment);
     };
     var alternate_1 = ($$anchor2) => {
-      var text_2 = text("Whatsapp Sender: in attesa");
-      append($$anchor2, text_2);
+      var fragment_4 = root_5();
+      append($$anchor2, fragment_4);
     };
     if_block(node, ($$render) => {
-      if ($packet_num() > 0) $$render(consequent_1);
+      if ($packet_num() > 0) $$render(consequent_2);
       else $$render(alternate_1, false);
     });
   }
+  var node_3 = sibling(node, 2);
+  each(node_3, 1, $lines, index, ($$anchor2, line) => {
+    var fragment_5 = root_6();
+    var text_2 = first_child(fragment_5, true);
+    template_effect(() => set_text(text_2, get$1(line)));
+    append($$anchor2, fragment_5);
+  });
   append($$anchor, div);
   pop();
   $$cleanup();
@@ -4001,17 +4105,14 @@ function Main($$anchor, $$props) {
   $$cleanup();
 }
 delegate(["change", "click"]);
-function log(message) {
-  console.log("Whatsapp Sender:", message);
-}
 inject(Main, '//h1[contains(text(),"WhatsApp Web")]', (anchor) => {
   const element = document.createElement("div");
   const container = anchor.parentElement?.parentElement?.parentElement;
   if (container === void 0 || container === null)
     throw new Error("Could not inject main");
   else return replaceElement(container, element);
-}).then(() => log("Main injected"));
+}).then(() => console.log("Main injected"));
 inject(SidebarWidget, '//*[@aria-label="chat-list-filters"]', (anchor) => {
   const element = document.createElement("div");
   return insertBefore(anchor, element);
-}).then(() => log("SidebarWidget injected"));
+}).then(() => console.log("SidebarWidget injected"));

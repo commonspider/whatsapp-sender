@@ -4,7 +4,7 @@ import { Socket } from "./socket";
 import { Delayer } from "./delayer";
 import type { Log } from "./log";
 
-type CommandType = "click" | "click_and_type";
+type CommandType = "click" | "click_and_type" | "click_and_clear";
 
 export class Sender {
   socket: Socket;
@@ -37,6 +37,10 @@ export class Sender {
     return this.sendCommand("click_and_type", { element, value });
   }
 
+  clickAndClear(element: string | HTMLElement) {
+    return this.sendCommand("click_and_clear", element);
+  }
+
   async sendMessages(
     messages: { phone: string; message: string }[],
     options?: { dry: boolean },
@@ -67,6 +71,7 @@ export class Sender {
       return false;
     }
     await this.click(listitems[1]);
+    await this.clickAndClear('//*[@aria-placeholder="Type a message"]');
     await this.clickAndType('//*[@aria-placeholder="Type a message"]', message);
     if (!dry) await this.click('//*[@aria-label="Send"]');
     this.delayer.reset();

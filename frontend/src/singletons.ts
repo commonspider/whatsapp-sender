@@ -4,7 +4,7 @@ import { Log } from "./lib/log";
 
 export const log = new Log();
 export const sender = new Sender({
-  send_delay: 20,
+  send_delay: 5,
   log,
 });
 export const socket = sender.socket;

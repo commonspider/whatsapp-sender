@@ -3869,6 +3869,9 @@ class Sender {
   clickAndType(element, value) {
     return this.sendCommand("click_and_type", { element, value });
   }
+  clickAndClear(element) {
+    return this.sendCommand("click_and_clear", element);
+  }
   async sendMessages(messages, options) {
     this.packets_num.set(messages.length);
     for (const { phone, message } of messages) {
@@ -3891,6 +3894,7 @@ class Sender {
       return false;
     }
     await this.click(listitems[1]);
+    await this.clickAndClear('//*[@aria-placeholder="Type a message"]');
     await this.clickAndType('//*[@aria-placeholder="Type a message"]', message);
     if (!dry) await this.click('//*[@aria-label="Send"]');
     this.delayer.reset();
@@ -4007,7 +4011,7 @@ function parseCSV(data) {
 }
 var root_1 = /* @__PURE__ */ from_html(`<option> </option>`);
 var root_2 = /* @__PURE__ */ from_html(`<option> </option>`);
-var root = /* @__PURE__ */ from_html(`<div><label>Seleziona il file CSV con i contatti:<br/> <input type="file" accept=".csv"/><br/></label> <label>Seleziona la colonna con i nomi dei contatti:<br/> <select id="column-name"></select><br/></label> <label>Seleziona la colonna con il numero di telefono dei contatti:<br/> <select id="column-phone"></select><br/></label> <label>Numero di contatti validi:<br/> <input disabled/><br/></label> <label>Scrivi il tuo messaggio.<br/> <br/> <textarea></textarea><br/></label> <label><button>Invia i messaggi</button><br/></label> <label><button>Invia i messaggi (Dry Mode)</button><br/></label></div>`);
+var root = /* @__PURE__ */ from_html(`<div><label>Seleziona il file CSV con i contatti:<br/> <input type="file" accept=".csv"/><br/></label><br/> <label>Seleziona la colonna con i nomi dei contatti:<br/> <select id="column-name"></select><br/></label><br/> <label>Seleziona la colonna con il numero di telefono dei contatti:<br/> <select id="column-phone"></select><br/></label><br/> <label>Numero di contatti validi:<br/> <input disabled/><br/></label><br/> <label>Scrivi il tuo messaggio.<br/> <br/> <textarea></textarea><br/></label><br/> <label><button>Invia i messaggi</button><br/></label><br/> <label><button>Invia i messaggi (Dry Mode)</button><br/></label></div>`);
 function Main($$anchor, $$props) {
   push($$props, true);
   const $column_names = () => store_get(column_names, "$column_names", $$stores);
@@ -4029,7 +4033,7 @@ function Main($$anchor, $$props) {
     return value !== void 0 && value !== "";
   }
   const n_contacts = derived(valid_contacts, (rows) => rows.length);
-  let user_message = /* @__PURE__ */ state("");
+  let user_message = /* @__PURE__ */ state("Ciao {nome}!");
   function onFileInputChange(e) {
     const file = e.target.files[0];
     reader.readAsText(file);
@@ -4066,7 +4070,7 @@ function Main($$anchor, $$props) {
   var label = child(div);
   var input = sibling(child(label), 3);
   input.__change = onFileInputChange;
-  var label_1 = sibling(label, 2);
+  var label_1 = sibling(label, 3);
   var select = sibling(child(label_1), 3);
   each(select, 5, $column_names, index, ($$anchor2, column) => {
     var option = root_1();
@@ -4080,7 +4084,7 @@ function Main($$anchor, $$props) {
     });
     append($$anchor2, option);
   });
-  var label_2 = sibling(label_1, 2);
+  var label_2 = sibling(label_1, 3);
   var select_1 = sibling(child(label_2), 3);
   each(select_1, 5, $column_names, index, ($$anchor2, column) => {
     var option_1 = root_2();
@@ -4094,16 +4098,16 @@ function Main($$anchor, $$props) {
     });
     append($$anchor2, option_1);
   });
-  var label_3 = sibling(label_2, 2);
+  var label_3 = sibling(label_2, 3);
   var input_1 = sibling(child(label_3), 3);
-  var label_4 = sibling(label_3, 2);
+  var label_4 = sibling(label_3, 3);
   var text_2 = sibling(child(label_4), 2);
   text_2.nodeValue = " Per inserire il nome della persona, usa questo placeholder: {nome}";
   var textarea = sibling(text_2, 3);
-  var label_5 = sibling(label_4, 2);
+  var label_5 = sibling(label_4, 3);
   var button = child(label_5);
   button.__click = sendMessages;
-  var label_6 = sibling(label_5, 2);
+  var label_6 = sibling(label_5, 3);
   var button_1 = child(label_6);
   button_1.__click = sendMessagesDry;
   template_effect(() => set_value(input_1, $n_contacts()));

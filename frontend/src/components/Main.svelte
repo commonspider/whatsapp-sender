@@ -26,7 +26,7 @@
   }
   const n_contacts = derived(valid_contacts, (rows) => rows.length);
 
-  let user_message = $state("");
+  let user_message = $state("Ciao {nome}!");
 
   function onFileInputChange(e: Event) {
     const file = (e.target as HTMLInputElement).files[0];
@@ -73,7 +73,7 @@
   <label>
     Seleziona il file CSV con i contatti:<br />
     <input type="file" accept=".csv" onchange={onFileInputChange} /><br />
-  </label>
+  </label><br />
   <label>
     Seleziona la colonna con i nomi dei contatti:<br />
     <select id="column-name" bind:value={name_column}>
@@ -81,7 +81,7 @@
         <option value={column}>{column}</option>
       {/each}
     </select><br />
-  </label>
+  </label><br />
   <label>
     Seleziona la colonna con il numero di telefono dei contatti:<br />
     <select id="column-phone" bind:value={phone_column}>
@@ -89,20 +89,20 @@
         <option value={column}>{column}</option>
       {/each}
     </select><br />
-  </label>
+  </label><br />
   <label>
     Numero di contatti validi:<br />
     <input value={$n_contacts} disabled /><br />
-  </label>
+  </label><br />
   <label>
     Scrivi il tuo messaggio.<br />
     Per inserire il nome della persona, usa questo placeholder: {"{"}nome{"}"}<br
     />
     <textarea bind:value={user_message}></textarea><br />
-  </label>
+  </label><br />
   <label>
     <button onclick={sendMessages}>Invia i messaggi</button><br />
-  </label>
+  </label><br />
   <label>
     <button onclick={sendMessagesDry}>Invia i messaggi (Dry Mode)</button><br />
   </label>

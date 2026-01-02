@@ -2,6 +2,7 @@ from contextlib import suppress
 from typing import TypedDict, Any
 
 from selenium.common import NoSuchWindowException, InvalidSessionIdException
+from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
@@ -40,11 +41,18 @@ class App:
         if typ == "click":
             element = self._get_element(data)
             element.click()
+
         elif typ == "click_and_type":
             element = self._get_element(data["element"])
             value = data["value"]
             element.click()
             element.send_keys(value)
+
+        elif typ == "click_and_clear":
+            element = self._get_element(data)
+            element.click()
+            text = element.text
+            element.send_keys(Keys.BACKSPACE * len(text))
 
     def _get_element(self, element: str | WebElement):
         if isinstance(element, WebElement):
